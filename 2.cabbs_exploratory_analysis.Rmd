@@ -1,0 +1,268 @@
+---
+title: "CABBS_harmonized"
+author: "Yodit Goshu"
+date: "2026-02-20"
+output: html_document
+---
+
+#Observing variables in the dataset
+```{r}
+names(filtered_data)
+```
+
+
+#Cross tab of all the education variables in CABBS - exploratory analysis
+```{r}
+table(filtered_data$YearsEducationUS, filtered_data$YearsEducationUS_Converted)
+table(filtered_data$YearsEducationUS, filtered_data$Edu_2levels)
+table(filtered_data$YearsEducationUS_Converted, filtered_data$Edu_2levels)
+```
+
+
+#Cross tab of Race and Education level
+```{r, include = FALSE}
+library(dplyr) 
+library(forcats)
+
+filtered_data <- filtered_data %>%
+  mutate(RaceEthnicity_new = case_when(
+    Race_AfricanAmerican == 1 ~ paste("African American /", Ethnicity),
+    Race_Asian == 1 ~ paste("Asian /", Ethnicity),
+    Race_Caucasian == 1 ~ paste("White /", Ethnicity),
+    Race_NativeAmerican == 1 ~ paste("NativeAmerican /", Ethnicity),
+    Race_PacificIslander == 1 ~ paste("PacificIslander /", Ethnicity),
+    Race_Other == 1 ~ paste("Other /", Ethnicity),
+    Race_DeclinedToState == 1 ~ paste("DeclinedToState /", Ethnicity),
+    TRUE ~ NA_character_
+  ))
+
+#Cross tabbing race/ethnicity by education level and including the NA values
+race_edu_table <- table(filtered_data$RaceEthnicity_new, filtered_data$Edu_2levels, useNA = "ifany")
+race_edu_row_percent <- prop.table(race_edu_table, margin = 1)
+
+#Adding row percentages to each frequency value
+n_percent_table <- matrix(
+  paste0(
+    race_edu_table, " (", round(100 * race_edu_row_percent, 1), "%)"
+  ),
+  nrow = nrow(race_edu_table),
+  dimnames = dimnames(race_edu_table)
+)
+
+#Complete table with NAs
+print(n_percent_table)
+
+```
+
+
+
+#Cross tab of final Race/Ethnicity and Education level - checking how many non-latino white participants had above 12 years of education
+```{r, include = FALSE}
+#Cross tabbing race/ethnicity by education level and including the NA values
+race_edu_table_final <- table(filtered_data$RaceEthnicity_final, filtered_data$Edu_2levels, useNA = "ifany")
+race_edu_row_percent1 <- prop.table(race_edu_table_final, margin = 1)
+
+#Adding row percentages to each frequency value
+n_percent_table1 <- matrix(
+  paste0(
+    race_edu_table_final, " (", round(100 * race_edu_row_percent1, 1), "%)"
+  ),
+  nrow = nrow(race_edu_table_final),
+  dimnames = dimnames(race_edu_table_final)
+)
+
+#Complete table with NAs
+print(n_percent_table1)
+
+```
+
+
+#Creating a clean binary numerical variable for blood draw status
+```{r}
+library(dplyr)
+
+filtered_data <- filtered_data %>%
+  mutate(BD_Status_collected_clean = case_when(
+    BD_Status == "Collected" ~ 1,
+    TRUE ~ 0     # everything else, including NA, becomes 0
+  ))
+table(filtered_data$BD_Status_collected_clean)
+
+#0 = CAL-BHR participants with no complete blood draw
+#1 = CABBS participants with a blood draw
+```
+
+
+
+#Recoding to set missing values to NA
+```{r, include = FALSE}
+#Using this variable for columns 1 and 2 in Table 1
+#Creating a dichotomous variable for Blood draw status
+#filtered_data$BD_Status_collected_clean <- filtered_data$BD_Status_collected  
+#filtered_data$BD_Status_collected_clean[filtered_data$BD_Status_collected_clean %in% c(NA)] <- 0
+
+#----**Recoding the NA's ---- 
+filtered_data <- filtered_data %>%
+  mutate(across(
+    c(
+      "Edu_2levels",
+      "Occupational_role_categories",
+      "Current_employment_status_cat",
+      "Marital_status_category",
+      "ADI_SuppressionCode",
+      "WHODAS_Cognition_D1_1",
+      "WHODAS_Cognition_D1_4",
+      "WHODAS_Mobility_D2_1",
+      "WHODAS_Mobility_D2_5",
+      "WHODAS_SelfCare_D3_1",
+      "WHODAS_SelfCare_D3_2",
+      "WHODAS_GettingAlong_D4_1",
+      "WHODAS_GettingAlong_D4_2",
+      "WHODAS_LifestyleAct_D5_1",
+      "WHODAS_LifestyleAct_D5_5",
+      "WHODAS_Participation_D6_1",
+      "WHODAS_Participation_D6_5",
+      "WHODAS_unknown_2",
+      "WHODAS_EffectsOfDiffi_H1",
+      "WHODAS_EffectsOfDiffi_H2",
+      "WHODAS_EffectsOfDiffi_H3",
+      "Self_reported_health_baseline",
+      "Overall_health_30days",
+      "APOE"
+    ),
+    ~ na_if(trimws(.), "") 
+  ))
+
+
+```
+
+
+
+
+#Looking at the distribution of self-ECog score by blood draw status in CABBS
+```{r, eval = FALSE}
+library(ggplot2)
+library(dplyr)
+
+#Only including rows where BD_Status_collected_clean is 0 or 1
+plot1 <- filtered_data %>%
+  filter(BD_Status_collected_clean %in% c(0, 1))
+
+#Density plot
+ggplot(plot1, aes(x = Self_ECog_score, fill = factor(BD_Status_collected_clean))) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Density Plot of Self-ECog Scores by Blood Draw Status",
+    x = "Self-ECog Score",
+    y = "Density",
+    fill = "Blood Draw Status"
+  ) +
+  scale_fill_manual(values = c("0" = "#1f77b4", "1" = "#ff7f0e"),
+                    labels = c("0" = "BD Status: 0", "1" = "BD Status: 1")) +
+  theme_minimal()
+
+
+```
+
+
+
+
+#Looking at baseline age distribution by blood draw status in CABBS
+```{r, eval = FALSE}
+library(ggplot2)
+library(dplyr)
+
+#Only including rows where BD_Status_collected_clean is 0 or 1
+plot2 <- filtered_data %>%
+  filter(BD_Status_collected_clean %in% c(0, 1))
+
+#density plot
+ggplot(plot2, aes(x = Age_Baseline, fill = factor(BD_Status_collected_clean))) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Density Plot of Age by Blood Draw Status",
+    x = "Age at baseline",
+    y = "Density",
+    fill = "Blood Draw Status"
+  ) +
+  scale_fill_manual(values = c("0" = "#1f77b4", "1" = "#ff7f0e"),
+                    labels = c("0" = "BD Status: 0", "1" = "BD Status: 1")) +
+  theme_minimal()
+
+
+```
+
+
+
+
+#Looking at baseline age distribution for each race/ethnicity
+```{r, eval = FALSE}
+library(ggplot2)
+library(dplyr)
+
+ggplot(filtered_data, aes(x = Age_Baseline, fill = factor(RaceEthnicity_final))) +
+  geom_density(alpha = 0.5) +
+  labs(
+    title = "Density Plot of Age by Race/Ethnicity",
+    x = "Age at Baseline",
+    y = "Density",
+    fill = "Race/Ethnicity"
+  ) +
+  theme_minimal()
+
+
+```
+
+
+#Looking at baseline age summary statistics by each race/ethnicity
+```{r, eval = FALSE}
+library(dplyr)
+
+#Summary statistics of age by RaceEthnicity_final
+age_summary_table <- filtered_data %>%
+  group_by(RaceEthnicity_final) %>%
+  summarize(
+    Count = n(),
+    Min_Age = min(Age_Baseline, na.rm = TRUE),
+    Max_Age = max(Age_Baseline, na.rm = TRUE),
+    Mean_Age = mean(Age_Baseline, na.rm = TRUE),
+    Median_Age = median(Age_Baseline, na.rm = TRUE),
+    SD_Age = sd(Age_Baseline, na.rm = TRUE)
+  ) %>%
+
+print(age_summary_table)
+
+```
+
+
+
+#Looking at age distribution for each race/ethnicity individually
+```{r, eval = FALSE}
+library(ggplot2)
+library(dplyr)
+
+#Only looking where Race/Ethnicity is "Latino"
+plot3 <- filtered_data %>%
+  filter(RaceEthnicity_final == 7)
+
+ggplot(plot3, aes(x = Age_Baseline)) +
+  geom_density(fill = "#1f77b4", alpha = 0.6) +
+  labs(
+    title = "Density Plot of Age for Non-Latino Other Participants",
+    x = "Age at Baseline",
+    y = "Density"
+  ) +
+  theme_minimal()
+
+```
+
+
+```{r}
+names(filtered_data)
+```
+
+
+```{r}
+# saving cleaned dataset object
+save(filtered_data, file = file.path(path_to_analytic_data, "CABBS_cleaned.RData"))
+```
