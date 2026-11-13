@@ -3,6 +3,7 @@ The California Blood Biomarker Study (CABBS) is a California Latino Brain Health
 
 
 The scripts are:
+
 0. cabbs_path_UPDATE.R: this r file needs to be updated with the users file path.
 1. cabbs_codebook.Rmd: this script creates a codebook of all the variables of interest in the CABBS dataset.
 2. cabbs_exploratory_analysis.Rmd: this script runs exploratory analysis between race, education, and age. In addition, to summary statistics and cross-tabs between other variables.
