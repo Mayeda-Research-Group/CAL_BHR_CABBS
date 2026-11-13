@@ -1,5 +1,6 @@
 # CAL_BHR_CABBS
-The California Blood Biomarker Study (CABBS) is a California Latino Brain Health Registry (CAL-BHR) substudy designed to evaluate feasibility of participant enrollment and completion of mobile phlebotomy for plasma AD biomarkers and genetic analysis among a racially and ethnically diverse sample of CAL-BHR participants aged 55+.
+The California Blood Biomarker Study (CABBS) is a California Latino Brain Health Registry (CAL-BHR) substudy designed to evaluate feasibility and acceptability of mobile phlebotomy for plasma AD biomarkers and genetic analysis among a racially and ethnically diverse sample of participants aged 55+ in the California Brain Health Registry, an internet-based longitudinal study.
+
 
 The scripts are:
 1. cabbs_codebook.Rmd: this script creates a codebook of all the variables of interest in the CABBS dataset.
