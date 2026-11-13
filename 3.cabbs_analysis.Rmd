@@ -1,0 +1,1588 @@
+---
+title: "CABBS Analysis"
+author: "Yodit Goshu"
+date: "2026-06-23"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r message=FALSE}
+if (!require("pacman"))
+  install.packages("pacman", repos = 'http://cran.us.r-project.org')
+
+p_load(
+  "here",
+  "haven",
+  "epiDisplay",
+  "readxl",
+  "tidyverse", "gtsummary", "survey"
+)
+```
+
+
+#Creating a duplicate dataset to run analysis
+```{r, include = FALSE}
+source(here('scripts', '0.cabbs_paths.R'))
+load(file.path(path_to_analytic_data, "CABBS_cleaned.RData"))
+table1_data <- filtered_data
+```
+
+
+
+#Creating harmonized CABBS variables
+
+#Creating a new harmonized categorical age variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Age_harm = case_when(
+    Age_Referral >= 55 & Age_Referral <= 59 ~ 1,
+    Age_Referral >= 60 & Age_Referral <= 64 ~ 2,
+    Age_Referral >= 65 & Age_Referral <= 69 ~ 3,
+    Age_Referral >= 70 & Age_Referral <= 74 ~ 4,
+    Age_Referral >= 75 & Age_Referral <= 79 ~ 5,
+    Age_Referral >= 80 ~ 6,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Age_harm, exclude = F)
+
+
+#1 = 55 - 59
+#2 = 60 - 64
+#3 = 65 - 69
+#4 = 70 - 74
+#5 = 75 - 79
+#6 = 80 or older
+```
+
+
+#Creating a new harmonized sex/gender variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Female_harm = case_when(
+    Gender == "Male" ~ 0,
+    Gender == "Female" ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Female_harm, exclude = F)
+
+
+#0 = Male
+#1 = Female
+```
+
+
+
+#Creating a new harmonized race variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(
+    Race_multiracial = Race_AfricanAmerican + Race_Asian + Race_Caucasian +
+                 Race_NativeAmerican + Race_PacificIslander + Race_Other,
+    
+    Race_harm = case_when(
+      Race_multiracial > 1 ~ 6, 
+      Race_Caucasian == 1 ~ 1,
+      Race_AfricanAmerican == 1 ~ 2,
+      Race_NativeAmerican == 1 ~ 3,
+      Race_Asian == 1 ~ 4,
+      Race_PacificIslander == 1 ~ 5,
+      Race_Other == 1 ~ 7,
+      TRUE ~ NA_real_
+    ))
+
+table(table1_data$Race_harm, exclude = F)
+
+
+#1 = White only
+#2 = Black or African American only
+#3 = American Indian or Alaskan Native only
+#4 = Asian only
+#5 = Native Hawaiian or other Pacific Islander only
+#6 = Multiracial
+#7 = Other 
+
+```
+
+
+#Creating a new harmonized ethnicity variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Ethnicity_harm = case_when(
+    Ethnicity == "Not Latino" ~ 0,
+    Ethnicity == "Latino" ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Ethnicity_harm, exclude = F)
+
+
+#0 = Not Latino
+#1 = Latino
+```
+
+
+#Creating a new harmonized race/ethnicity variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(RaceEthnicity_harm = case_when(
+    RaceEthnicity_final == 8 ~ 1,
+    RaceEthnicity_final == 2 ~ 2,
+    RaceEthnicity_final == 5 ~ 3, 
+    RaceEthnicity_final == 3 ~ 4, 
+    RaceEthnicity_final == 7 ~ 5,
+    RaceEthnicity_final == 4 ~ 6,
+    RaceEthnicity_final == 1 ~ 7,
+    RaceEthnicity_final == 6 ~ 8,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$RaceEthnicity_harm, exclude = F)
+
+
+#1 = Non-Latino White
+#2 = Non-Latino Black/African American
+#3 = Non-Latino American Indian or Alaskan Native
+#4 = Non-Latino Asian
+#5 = Non-Latino Pacific Islander
+#6 = Non-Latino Multiracial
+#7 = Latino/Hispanic
+#8 = Non-Latino Other
+
+```
+
+
+#Creating a new harmonized education variable in CABBS to align with BRFSS dat
+```{r}
+table1_data <- table1_data %>%
+  mutate(Education_harm = case_when(
+    YearsEducationUS >= 0 & YearsEducationUS <= 1 ~ 1,
+    YearsEducationUS >= 2 & YearsEducationUS <= 3 ~ 2,
+    YearsEducationUS >= 4 & YearsEducationUS <= 7 ~ 3,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Education_harm, exclude = F)
+
+#1 = High school graduate or less
+#2 = Some college or technical school
+#3 = College graduate
+```
+
+
+#Creating a new harmonized memory variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Memory_harm = case_when(
+    Ever_ConcernedMemoryProblem == 1 ~ 1,
+    Ever_ConcernedMemoryProblem == 0 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Memory_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized self-rated health variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Health_harm = case_when(
+    Self_reported_health_baseline == "Excellent" ~ 1,
+    Self_reported_health_baseline == "Very Good" ~ 2,
+    Self_reported_health_baseline == "Good" ~ 3,
+    Self_reported_health_baseline == "Fair" ~ 4,
+    Self_reported_health_baseline == "Poor" ~ 5,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Health_harm, exclude = F)
+
+
+#1 = Excellent
+#2 = Very Good
+#3 = Good
+#4 = Fair
+#5 = Poor
+
+```
+
+
+#Creating a new harmonized stroke variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Stroke_harm = case_when(
+    Ever_Stroke == 0 ~ 0,
+    Ever_Stroke == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Stroke_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized heart disease variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(HeartDisease_harm = case_when(
+    Heart_disease == 0 ~ 0,
+    Heart_disease == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$HeartDisease_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized hypertension variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Hypertension_harm = case_when(
+    Hypertension == 0 ~ 0,
+    Hypertension == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Hypertension_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized diabetes variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Diabetes_harm = case_when(
+    Diabetes == 0 ~ 0,
+    Diabetes == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Diabetes_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized cancer variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Cancer_harm = case_when(
+    Cancer == 0 ~ 0,
+    Cancer == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Cancer_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+#Creating a new harmonized hearing loss variable in CABBS to align with BRFSS data
+```{r}
+table1_data <- table1_data %>%
+  mutate(Hearing_harm = case_when(
+    Hearing_Loss == 0 ~ 0,
+    Hearing_Loss == 1 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(table1_data$Hearing_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+```{r, include = FALSE}
+#Ensuring all harmonized variables were added to the dataset
+names(table1_data)
+```
+
+
+#Creating First 2 columns of CABBS Table 3 (CABBS paper 1)
+```{r}
+table1_data %>%
+  mutate(
+    household_income = factor(household_income,
+      levels = 1:6,
+      labels = c("$0-$14,999", "$15,000–$29,999", "$30,000–$74,999", "$75,000 and over", "Prefer not to answer", "Don't know")
+    ),
+     Retirement_status = factor(Retirement_status,
+      levels = 1:2,
+      labels = c("Yes", "No")
+      ),
+       Time_Since_Referral_yrs = as.numeric(Time_Since_Referral_yrs),
+        WHODAS_EffectsOfDiffi_H1 = as.numeric(WHODAS_EffectsOfDiffi_H1),
+        WHODAS_EffectsOfDiffi_H2 = as.numeric(WHODAS_EffectsOfDiffi_H2),
+        WHODAS_EffectsOfDiffi_H3 = as.numeric(WHODAS_EffectsOfDiffi_H3)) %>%
+  dplyr::select(Time_Since_Referral, 
+                Time_Since_Referral_yrs, 
+                Age_Referral, 
+                Gender, 
+                Race_AfricanAmerican, 
+                Race_Asian, 
+                Race_Caucasian, 
+                Race_NativeAmerican, 
+                Race_PacificIslander, 
+                Race_Other, 
+                Race_DeclinedToState, 
+                Ethnicity, 
+                RaceEthnicity_new, 
+                RaceEthnicity_final, 
+                YearsEducationUS, 
+                Edu_2levels, 
+                Occupational_role_categories, 
+                Current_employment_status_cat, 
+                Retirement_status, 
+                Marital_status_category, 
+                household_income, 
+                ADI_StateRank, 
+                ADI_NationalRank, 
+                ADI_SuppressionCode, 
+                SSS_community, 
+                SSS_US, 
+                SSS_childhood_community, 
+                Trust_total, 
+                Ever_ConcernedMemoryProblem, 
+                Ever_FHXAD, 
+                Ever_Alzheimers, 
+                Ever_MCI, 
+                Ever_Dementia, 
+                Self_ECog_score, 
+                PAL_mem, 
+                PAL_sum, 
+                GDS_Score, 
+                PHQ9_Total_time, 
+                WHODAS_Cognition_D1_1, 
+                WHODAS_Cognition_D1_4, 
+                WHODAS_Mobility_D2_1, 
+                WHODAS_Mobility_D2_5, 
+                WHODAS_SelfCare_D3_1, 
+                WHODAS_SelfCare_D3_2, 
+                WHODAS_GettingAlong_D4_1, 
+                WHODAS_GettingAlong_D4_2, 
+                WHODAS_LifestyleAct_D5_1, 
+                WHODAS_LifestyleAct_D5_5, 
+                WHODAS_Participation_D6_1, 
+                WHODAS_Participation_D6_5, 
+                WHODAS_unknown_2, 
+                WHODAS_EffectsOfDiffi_H1, 
+                WHODAS_EffectsOfDiffi_H2, 
+                WHODAS_EffectsOfDiffi_H3, 
+                Self_reported_health_baseline, 
+                Overall_health_30days, 
+                Ever_Stroke, 
+                Heart_disease, 
+                Hypertension, 
+                Diabetes, 
+                Cancer, 
+                Hearing_Loss, 
+                APOE, 
+                BD_Status_collected_clean ) %>%
+  tbl_summary(
+    by = BD_Status_collected_clean,  #stratification variable
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      Time_Since_Referral_yrs ~ "{median} ({p25}, {p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "** **",
+  stat_1 ~ "**CABBS participants without blood draw (n = {n})**",
+  stat_2 ~ "**CABBS participants with blood draw (n = {n})**"
+)
+
+#Retirement status: 1 = yes, 2 = no
+```
+
+
+#Final cleaned Table 3 (CABBS paper 1) with the harmonized CABBS variables
+```{r, include = FALSE}
+table1_data %>%
+  select(Age_harm, Female_harm, Race_harm, Ethnicity_harm, RaceEthnicity_harm, Education_harm, Memory_harm, Health_harm, Stroke_harm, HeartDisease_harm, Hypertension_harm, Diabetes_harm, Cancer_harm, Hearing_harm, AB42, AB40, RATIO_AB4240, NPTAU217, PTAU217, RATIO_PTAU217, APOE, BD_Status_collected_clean) %>%
+  tbl_summary(
+    by = BD_Status_collected_clean,  #stratification variable
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      AB42 ~ "{median} ({p25}, {p75})",
+      AB40 ~ "{median} ({p25}, {p75})",
+      RATIO_AB4240 ~ "{median} ({p25}, {p75})",
+      NPTAU217 ~ "{median} ({p25}, {p75})",
+      PTAU217 ~ "{median} ({p25}, {p75})",
+      RATIO_PTAU217 ~ "{median} ({p25}, {p75})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "** **",
+  stat_1 ~ "**CABBS participants without blood draw (n = {n})**",
+  stat_2 ~ "**CABBS participants with blood draw (n = {n})**"
+)
+
+```
+
+
+
+
+#Final cleaned CABBS Table 1 (CABBS paper 1) without the bioplasma data to merge later
+```{r, include = FALSE}
+#Adding labels for each variable
+table1_data <- table1_data %>% 
+  mutate(
+     Age_harm = factor(Age_harm,
+      levels = c(1, 2, 3, 4, 5, 6), 
+      labels = c("55 - 59", "60 - 64", "65 - 69", "70 - 74", "75 - 79", "80 or older")
+      ),
+      Female_harm = factor(Female_harm,
+      levels = 0:1,
+      labels = c("Male", "Female")
+      ),
+     RaceEthnicity_harm = factor(RaceEthnicity_harm,
+      levels = c(1, 2, 3, 4, 5, 6, 7, 8),
+      labels = c("Non-Latino White", "Non-Latino Black/African American", "Non-Latino American Indian or Alaskan Native", "Non-Latino Asian", "Non-Latino Pacific Islander", "Non-Latino Multiracial", "Latino/Hispanic", "Non-Latino Other")
+     ),
+     Education_harm = factor(Education_harm,
+      levels = c(1, 2, 3),
+      labels = c("High school graduate or less", "Some college or technical school", "College graduate")
+     ),
+     Memory_harm = factor(Memory_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+     Health_harm = factor(Health_harm,
+      levels = c(1, 2, 3, 4, 5),
+      labels = c("Excellent", "Very good", "Good", "Fair", "Poor")
+     ),
+    Stroke_harm = factor(Stroke_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+    HeartDisease_harm = factor(HeartDisease_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+    Hypertension_harm = factor(Hypertension_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+    Diabetes_harm = factor(Diabetes_harm,
+      levels = c(1, 0),
+      labels = c("Yes",	"No")
+     ),     
+    Cancer_harm = factor(Cancer_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ), 
+    Hearing_harm = factor(Hearing_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No"))
+     )
+
+CABBS_harm <- table1_data %>%
+  mutate(
+       Time_Since_Referral_yrs = as.numeric(Time_Since_Referral_yrs),
+       BD_Status_collected_clean = factor(BD_Status_collected_clean,
+      levels = c(1, 0))  #reordering my strata group so the blood draw participants come first
+    ) %>%
+  select(Age_harm, Female_harm, RaceEthnicity_harm, Education_harm, Memory_harm, Health_harm, Stroke_harm, HeartDisease_harm, Hypertension_harm, Diabetes_harm, Cancer_harm, Hearing_harm, BD_Status_collected_clean) %>%
+  tbl_summary(
+    by = BD_Status_collected_clean,  #stratification variable
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "** **",
+  stat_1 ~ "**CABBS participants with a blood draw (n = {n})**",
+  stat_2 ~ "**CAL-BHR participants without a blood draw (n = {n})**"
+)
+
+print(CABBS_harm)
+```
+
+
+#Installing the original full BRFSS data to check for a continuous age variable, but was not found
+```{r, eval = FALSE}
+BRFSS_total <- read_xpt(file.path(path_to_brfss_data, "LLCP2022.XPT"))    #installing the BRFSS dataset
+
+BRFSS_total_CA <- BRFSS_total %>%
+  filter(`_STATE` == 6)      #State = 6 is California
+
+head(BRFSS_total_CA)
+names(BRFSS_total_CA)
+```
+
+
+
+#Installing the CA BRFSS data version 1 to compare CAL-BHR participants to the general CA pop
+```{r, include = FALSE}
+source(here('scripts', '0.cabbs_paths.R'))
+BRFSS_data <- read_xpt(file.path(path_to_brfss_data, "LLCP22V1.XPT"))%>% #installing the BRFSS dataset
+  select(`_STATE`,`_LCPWTV1`, `_AGEG5YR`, `_AGE80`, SEXVAR, `_MRACE2`, `_HISPANC`, `_RACE1`, `_EDUCAG`, CIMEMLOS, GENHLTH, CVDSTRK3, CVDCRHD4, CVDINFR4, DIABETE4, CHCOCNC1, DEAF,  `_AGE65YR`, EDUCA, `_PSU`)    
+
+BRFSS_CA <- BRFSS_data %>%
+  filter(`_STATE` == 6, `_AGE80` >= 55) %>%     #State = 6 is California, 8 = 55+ years old
+  mutate(
+    #`_AGEG5YR` = if_else(`_AGEG5YR` == 14, NA_real_, `_AGEG5YR`),
+    #`_AGE65YR` = if_else(`_AGE65YR` == 3, NA_real_, `_AGE65YR`),
+    `_MRACE2`  = if_else(`_MRACE2` %in% c(77, 88, 99), NA_real_, `_MRACE2`),
+    `_HISPANC` = if_else(`_HISPANC` == 9, NA_real_, `_HISPANC`),
+    `_RACE1`   = if_else(`_RACE1` == 9, NA_real_, `_RACE1`),
+    EDUCA      = if_else(EDUCA == 9, NA_real_, EDUCA),
+    `_EDUCAG`  = if_else(`_EDUCAG` == 9, NA_real_, `_EDUCAG`),
+    CIMEMLOS   = if_else(CIMEMLOS %in% c(7, 8, 9), NA_real_, CIMEMLOS),
+    GENHLTH    = if_else(GENHLTH %in% c(7, 8, 9), NA_real_, GENHLTH),
+    CVDSTRK3   = if_else(CVDSTRK3 %in% c(7, 8, 9), NA_real_, CVDSTRK3),
+    CVDCRHD4   = if_else(CVDCRHD4 %in% c(7, 8, 9), NA_real_, CVDCRHD4),
+    CVDINFR4   = if_else(CVDINFR4 %in% c(7, 8, 9), NA_real_, CVDINFR4),
+    DIABETE4   = case_when(
+      DIABETE4 %in% c(7, 8, 9) ~ NA_real_,
+      DIABETE4 %in% c(2, 4) ~ 3,
+      TRUE ~ as.numeric(DIABETE4)
+    ),
+    CHCOCNC1   = if_else(CHCOCNC1 %in% c(7, 8, 9), NA_real_, CHCOCNC1),
+    DEAF       = if_else(DEAF %in% c(7, 8, 9), NA_real_, DEAF)
+  )
+head(BRFSS_CA)
+
+```
+
+
+```{r, include = FALSE}
+#Ensuring all selected variables are in the dataset
+names(BRFSS_CA)
+```
+
+
+
+#Creating a new harmonized categorical age variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Age_harm = case_when(
+    `_AGE80` >= 55 & `_AGE80` <= 59 ~ 1,
+    `_AGE80` >= 60 & `_AGE80` <= 64 ~ 2,
+    `_AGE80` >= 65 & `_AGE80` <= 69 ~ 3,
+    `_AGE80` >= 70 & `_AGE80` <= 74 ~ 4,
+    `_AGE80` >= 75 & `_AGE80` <= 79 ~ 5,
+    `_AGE80` >= 80 ~ 6,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Age_harm, exclude = F)
+
+
+#1 = 55 - 59
+#2 = 60 - 64
+#3 = 65 - 69
+#4 = 70 - 74
+#5 = 75 - 79
+#6 = 80 or older
+```
+
+
+
+#Creating a new harmonized sex/gender variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Female_harm = case_when(
+    SEXVAR == 1 ~ 0,
+    SEXVAR == 2 ~ 1,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Female_harm, exclude = F)
+
+
+#0 = Male
+#1 = Female
+```
+
+
+
+
+#Creating a new harmonized race variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Race_harm = case_when(
+      `_MRACE2` == 1 ~ 1,
+      `_MRACE2` == 2 ~ 2,
+      `_MRACE2` == 3 ~ 3,
+      `_MRACE2` == 4 ~ 4,
+      `_MRACE2` == 5 ~ 5,
+      `_MRACE2` == 6 ~ 6,
+      TRUE ~ NA_real_
+    ))
+
+table(BRFSS_CA$Race_harm, exclude = F)
+
+
+#1 = White only
+#2 = Black or African American only
+#3 = American Indian or Alaskan Native only
+#4 = Asian only
+#5 = Native Hawaiian or other Pacific Islander only
+#6 = Multiracial
+#7 = Other 
+
+```
+
+
+
+
+#Creating a new harmonized ethnicity variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Ethnicity_harm = case_when(
+    `_HISPANC` == 1 ~ 1,
+    `_HISPANC` == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Ethnicity_harm, exclude = F)
+
+
+#0 = Not Latino
+#1 = Latino
+```
+
+
+
+
+#Creating a new harmonized race/ethnicity variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(RaceEthnicity_harm = case_when(
+    `_RACE1` == 1 ~ 1,
+    `_RACE1` == 2 ~ 2,
+    `_RACE1` == 3 ~ 3, 
+    `_RACE1` == 4 ~ 4, 
+    `_RACE1` == 5 ~ 5,
+    `_RACE1` == 7 ~ 6,
+    `_RACE1` == 8 ~ 7,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$RaceEthnicity_harm, exclude = F)
+
+
+#1 = Non-Latino White
+#2 = Non-Latino Black/African American
+#3 = Non-Latino American Indian or Alaskan Native
+#4 = Non-Latino Asian
+#5 = Non-Latino Pacific Islander
+#6 = Non-Latino Multiracial
+#7 = Latino/Hispanic
+#8 = Non-Latino Other (BRFSS won't have this category)
+
+```
+
+
+
+
+#Creating a new harmonized education variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Education_harm = case_when(
+    `_EDUCAG` >= 1 & `_EDUCAG` <= 2 ~ 1,
+    `_EDUCAG` == 3 ~ 2,
+    `_EDUCAG` == 4 ~ 3,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Education_harm, exclude = F)
+
+#1 = High school graduate or less
+#2 = Some college or technical school
+#3 = College graduate
+```
+
+
+
+#Creating a new harmonized memory variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Memory_harm = case_when(
+    CIMEMLOS == 1 ~ 1,
+    CIMEMLOS == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Memory_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+
+#Creating a new harmonized self-rated health variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Health_harm = case_when(
+    GENHLTH == 1 ~ 1,
+    GENHLTH == 2 ~ 2,
+    GENHLTH == 3 ~ 3,
+    GENHLTH == 4 ~ 4,
+    GENHLTH == 5 ~ 5,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Health_harm, exclude = F)
+
+
+#1 = Excellent
+#2 = Very Good
+#3 = Good
+#4 = Fair
+#5 = Poor
+
+```
+
+
+
+
+#Creating a new harmonized stroke variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Stroke_harm = case_when(
+    CVDSTRK3 == 1 ~ 1,
+    CVDSTRK3 == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Stroke_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+
+#Creating a new harmonized heart disease variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(HeartDisease_harm = case_when(
+    CVDCRHD4 == 1 ~ 1,
+    CVDCRHD4 == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$HeartDisease_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+#Creating a new harmonized hypertension variable in BRFSS to align with the CABBS data
+```{r}
+#No hypertension variable in BRFSS
+```
+
+
+
+#Creating a new harmonized diabetes variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Diabetes_harm = case_when(
+    DIABETE4 == 1 ~ 1,
+    DIABETE4 == 3 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Diabetes_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+#Creating a new harmonized cancer variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Cancer_harm = case_when(
+    CHCOCNC1 == 1 ~ 1,
+    CHCOCNC1 == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Cancer_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+#Creating a new harmonized hearing loss variable in BRFSS to align with the CABBS data
+```{r}
+BRFSS_CA <- BRFSS_CA %>%
+  mutate(Hearing_harm = case_when(
+    DEAF == 1 ~ 1,
+    DEAF == 2 ~ 0,
+    TRUE ~ NA_real_
+  ))
+
+table(BRFSS_CA$Hearing_harm, exclude = F)
+
+
+#0 = No
+#1 = Yes
+```
+
+
+
+#Creating the unweighted version of the BRFSS data to merge with CABBS Table 3 (CABBS paper 1)
+```{r, include = FALSE}
+BRFSS_CA %>%
+  mutate(
+     `_AGEG5YR` = factor(`_AGEG5YR`,
+      levels = c(8, 9, 10, 11, 12, 13),
+      labels = c("55 - 59", "60 - 64", "65 - 69", "70 - 74", "75 - 79", "80 or older")
+      ),
+      SEXVAR = factor(SEXVAR,
+      levels = 1:2,
+      labels = c("Male", "Female")
+      ),
+     `_MRACE2` = factor(`_MRACE2`,
+      levels = c(1, 2, 3, 4, 5, 6),
+      labels = c("White only", "Black or African American only", "American Indian or Alaskan Native only", "Asian only", "Native Hawaiian or other Pacific Islander only", "Multiracial")
+      ),
+     `_HISPANC` = factor(`_HISPANC`,
+      levels = c(1, 2),
+      labels = c("Hispanic, Latino/a, or Spanish origin", "Not of Hispanic, Latino/a, or Spanish origin")
+     ),
+     `_RACE1` = factor(`_RACE1`,
+      levels = c(1, 2, 3, 4, 5, 7, 8),
+      labels = c("White only, non-Hispanic", "Black only, non-Hispanic", "American Indian or Alaskan Native only, Non-Hispanic", "Asian only, non-Hispanic", "Native Hawaiian or other Pacific Islander only, Non-Hispanic", "Multiracial, non-Hispanic", "Hispanic")
+     ),
+     `_EDUCAG` = factor(`_EDUCAG`,
+      levels = c(1, 2, 3, 4),
+      labels = c("Did not graduate High School", "Graduated High School", "Attended College or Technical School", "Graduated from College or Technical")
+     ),
+     CIMEMLOS = factor(CIMEMLOS,
+      levels = 1:2,
+      labels = c("Yes", "No")
+     ),
+     GENHLTH = factor(GENHLTH,
+      levels = c(1, 2, 3, 4, 5),
+      labels = c("Excellent", "Very good", "Good", "Fair", "Poor")
+     ),
+    CVDSTRK3 = factor(CVDSTRK3,
+      levels = 1:2,
+      labels = c("Yes", "No")
+     ),
+    CVDCRHD4 = factor(CVDCRHD4,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),
+    CVDINFR4 = factor(CVDINFR4,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),    
+    DIABETE4 = factor(DIABETE4,
+      levels = c(1, 3),
+      labels = c("Yes", "No")
+     ),     
+    CHCOCNC1 = factor(CHCOCNC1,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ), 
+    DEAF = factor(DEAF,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ), 
+     ) %>%
+  select(`_AGEG5YR`, SEXVAR, `_MRACE2`, `_HISPANC`, `_RACE1`, `_EDUCAG`, CIMEMLOS, GENHLTH, CVDSTRK3, CVDCRHD4, CVDINFR4, DIABETE4, CHCOCNC1, DEAF ) %>%
+  tbl_summary(
+    statistic = list(
+      all_continuous() ~ "{mean} ({sd})",
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing",
+       label = list(
+      `_AGEG5YR` ~ "Fourteen-level Age Category",
+      SEXVAR ~ "Sex",
+      `_MRACE2` ~ "Calculated multiracial race categorization",
+      `_HISPANC` ~ "Hispanic Origin",
+      `_RACE1` ~ "Race/Ethnicity",
+      `_EDUCAG` ~ "Level of education completed",
+      CIMEMLOS ~ "During the past 12 months, have you experienced confusion or memory loss that is happening more often or is getting worse?",
+      GENHLTH ~ "Would you say that in general your health is:",
+      CVDSTRK3 ~ "Ever told you had a stroke?",
+      CVDCRHD4 ~ "Ever told you had angina or coronary heart disease?",
+      CVDINFR4 ~ "Ever told you had a heart attack, also called a myocardial infarction?",
+      DIABETE4 ~ "Ever told you had diabetes?",
+      CHCOCNC1 ~ "Ever told you had melanoma or any other types of cancer?",
+      DEAF ~ "Are you deaf or do you have serious difficulty hearing?"
+    )
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "**Variable**",
+  stat_0 ~ "**General 2022 CA population (n = {n})**"
+)
+```
+
+
+
+
+#Creating the FINAL weighted CA BRFSS table to merge with CABBS Table 3 (CABBS paper 1)
+```{r, include = FALSE}
+options(survey.lonely.psu = "adjust") 
+
+#Adding labels for each variable
+BRFSS_CA_weighted <- BRFSS_CA %>% 
+  mutate(
+     `_AGEG5YR` = factor(`_AGEG5YR`,
+      levels = c(8, 9, 10, 11, 12, 13), 
+      labels = c("55 - 59", "60 - 64", "65 - 69", "70 - 74", "75 - 79", "80 or older")
+      ),
+      SEXVAR = factor(SEXVAR,
+      levels = 1:2,
+      labels = c("Male", "Female")
+      ),
+     `_MRACE2` = factor(`_MRACE2`,
+      levels = c(1, 2, 3, 4, 5, 6),
+      labels = c("White only", "Black or African American only", "American Indian or Alaskan Native only", "Asian only", "Native Hawaiian or other Pacific Islander only", "Multiracial")
+      ),
+     `_HISPANC` = factor(`_HISPANC`,
+      levels = c(1, 2),
+      labels = c("Hispanic, Latino/a, or Spanish origin", "Not of Hispanic, Latino/a, or Spanish origin")
+     ),
+     `_RACE1` = factor(`_RACE1`,
+      levels = c(1, 2, 3, 4, 5, 7, 8),
+      labels = c("White only, non-Hispanic", "Black only, non-Hispanic", "American Indian or Alaskan Native only, Non-Hispanic", "Asian only, non-Hispanic", "Native Hawaiian or other Pacific Islander only, Non-Hispanic", "Multiracial, non-Hispanic", "Hispanic")
+     ),
+     `_EDUCAG` = factor(`_EDUCAG`,
+      levels = c(1, 2, 3, 4),
+      labels = c("Did not graduate High School", "Graduated High School", "Attended College or Technical School", "Graduated from College or Technical")
+     ),
+     CIMEMLOS = factor(CIMEMLOS,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),
+     GENHLTH = factor(GENHLTH,
+      levels = c(1, 2, 3, 4, 5),
+      labels = c("Excellent", "Very good", "Good", "Fair", "Poor")
+     ),
+    CVDSTRK3 = factor(CVDSTRK3,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),
+    CVDCRHD4 = factor(CVDCRHD4,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),
+    CVDINFR4 = factor(CVDINFR4,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ),    
+    DIABETE4 = factor(DIABETE4,
+      levels = c(1, 3),
+      labels = c("Yes",	"No")
+     ),     
+    CHCOCNC1 = factor(CHCOCNC1,
+      levels = c(1, 2),
+      labels = c("Yes", "No")
+     ), 
+    DEAF = factor(DEAF,
+      levels = c(1, 2),
+      labels = c("Yes", "No"))
+     )
+
+    #Create survey design 
+    brfssdsgn <- svydesign(
+     id = ~`_PSU`,        #FIX HERE BACK TO ~1, no difference made
+     #strata = ~`_STSTR`,
+     weights = ~`_LCPWTV1`, 
+    data = BRFSS_CA_weighted
+) 
+
+  tbl2_weighted <- brfssdsgn %>%
+  tbl_svysummary(
+    include = c(`_AGEG5YR`, SEXVAR, `_MRACE2`, `_HISPANC`, `_RACE1`
+                , `_EDUCAG`, CIMEMLOS, GENHLTH, CVDSTRK3, CVDCRHD4, CVDINFR4,
+                DIABETE4, CHCOCNC1, DEAF),
+    statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    missing = "ifany",
+    missing_text = "Missing",
+    label = list(
+      `_AGEG5YR` ~ "Fourteen-level Age Category",
+      SEXVAR ~ "Sex",
+      `_MRACE2` ~ "Calculated multiracial race categorization",
+      `_HISPANC` ~ "Hispanic Origin",
+      `_RACE1` ~ "Race/Ethnicity",
+      `_EDUCAG` ~ "Level of education completed",
+      CIMEMLOS ~ "Experienced worsening confusion or memory loss (12 mo)?",
+      GENHLTH ~ "General Health",
+      CVDSTRK3 ~ "Ever told you had a stroke?",
+      CVDCRHD4 ~ "Ever told you had angina or coronary heart disease?",
+      CVDINFR4 ~ "Ever told you had a heart attack?",
+      DIABETE4 ~ "Ever told you had diabetes?",
+      CHCOCNC1 ~ "Ever told you had cancer?",
+      DEAF ~ "Are you deaf or have serious difficulty hearing?"
+    )
+  ) %>%
+  add_n() %>%
+  bold_labels() %>%
+  modify_header(label ~ "**Variable**",
+                stat_0 ~ "**Weighted % (n = {n})**")
+
+print(tbl2_weighted)
+```
+
+
+
+#Harmonized BRFSS table used to merge later with CABBS Table 3 (CABBS paper 1)
+```{r, include = FALSE}
+options(survey.lonely.psu = "adjust") 
+
+#Adding labels for each variable
+BRFSS_CA_weighted <- BRFSS_CA %>% 
+  mutate(
+     Age_harm = factor(Age_harm,
+      levels = c(1, 2, 3, 4, 5, 6), 
+      labels = c("55 - 59", "60 - 64", "65 - 69", "70 - 74", "75 - 79", "80 or older")
+      ),
+      Female_harm = factor(Female_harm,
+      levels = 0:1,
+      labels = c("Male", "Female")
+      ),
+     RaceEthnicity_harm = factor(RaceEthnicity_harm,
+      levels = c(1, 2, 3, 4, 5, 6, 7),
+      labels = c("Non-Latino White", "Non-Latino Black/African American", "Non-Latino American Indian or Alaskan Native", "Non-Latino Asian", "Non-Latino Pacific Islander", "Non-Latino Multiracial", "Latino/Hispanic")
+     ),
+     Education_harm = factor(Education_harm,
+      levels = c(1, 2, 3),
+      labels = c("High school graduate or less", "Some college or technical school", "College graduate")
+     ),
+     Memory_harm = factor(Memory_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+     Health_harm = factor(Health_harm,
+      levels = c(1, 2, 3, 4, 5),
+      labels = c("Excellent", "Very good", "Good", "Fair", "Poor")
+     ),
+    Stroke_harm = factor(Stroke_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+    HeartDisease_harm = factor(HeartDisease_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ),
+    Diabetes_harm = factor(Diabetes_harm,
+      levels = c(1, 0),
+      labels = c("Yes",	"No")
+     ),     
+    Cancer_harm = factor(Cancer_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No")
+     ), 
+    Hearing_harm = factor(Hearing_harm,
+      levels = c(1, 0),
+      labels = c("Yes", "No"))
+     )
+   #Create survey design 
+    brfssdsgn <- svydesign(
+     id = ~ `_PSU`,        #FIX HERE BACK TO ~1
+     #strata = ~`_STSTR`,
+     weights = ~`_LCPWTV1`, 
+    data = BRFSS_CA_weighted
+) 
+
+  BRFSS_Harm <- brfssdsgn %>%
+  tbl_svysummary(
+    include = c(Age_harm, Female_harm, RaceEthnicity_harm, Education_harm, Memory_harm, Health_harm, Stroke_harm, HeartDisease_harm, Diabetes_harm, Cancer_harm, Hearing_harm),
+    statistic = list(all_categorical() ~ "{n} ({p}%)"),
+    missing = "ifany",
+    missing_text = "Missing",
+  ) %>%
+  add_n() %>%
+  bold_labels() %>%
+  modify_header(label ~ "**Variable**",
+                stat_0 ~ "**California population of older adults (n = {n})**")
+
+print(BRFSS_Harm)
+```
+
+
+\pagebreak
+
+## Table 3 (CABBS paper 1)
+
+<br>
+
+```{r, echo=FALSE}
+tbl_merge(
+  tbls = list(CABBS_harm, BRFSS_Harm),
+  tab_spanner = c("**CAL-BHR**", "**CA-BRFSS**")
+)
+```
+
+
+
+
+\pagebreak
+
+## Bioplasma Data: AD Biomarkers and APOE genotype
+
+<br>
+```{r}
+#Summary statistics of AD biomarker - AB42
+AB42_var <- table1_data$AB42
+AB42_summary <- list(
+N = sum(!is.na(AB42_var)),
+N_missing = sum(is.na(AB42_var)),
+Mean = mean(AB42_var, na.rm = TRUE),
+SD = sd(AB42_var, na.rm = TRUE),
+Min = min(AB42_var, na.rm = TRUE),
+P10 = quantile(AB42_var, 0.10, na.rm = TRUE),
+P25 = quantile(AB42_var, 0.25, na.rm = TRUE),
+Median = median(AB42_var, na.rm = TRUE),
+P75 = quantile(AB42_var, 0.75, na.rm = TRUE),
+P90 = quantile(AB42_var, 0.90, na.rm = TRUE),
+Max = max(AB42_var, na.rm = TRUE)
+)
+AB42_summary
+```
+
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - AB40
+AB40_var <- table1_data$AB40
+AB40_summary <- list(
+N = sum(!is.na(AB40_var)),
+N_missing = sum(is.na(AB40_var)),
+Mean = mean(AB40_var, na.rm = TRUE),
+SD = sd(AB40_var, na.rm = TRUE),
+Min = min(AB40_var, na.rm = TRUE),
+P10 = quantile(AB40_var, 0.10, na.rm = TRUE),
+P25 = quantile(AB40_var, 0.25, na.rm = TRUE),
+Median = median(AB40_var, na.rm = TRUE),
+P75 = quantile(AB40_var, 0.75, na.rm = TRUE),
+P90 = quantile(AB40_var, 0.90, na.rm = TRUE),
+Max = max(AB40_var, na.rm = TRUE)
+)
+AB40_summary
+```
+
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - RATIO_AB4240
+RATIO_AB4240_var <- table1_data$RATIO_AB4240
+RATIO_AB4240_summary <- list(
+N = sum(!is.na(RATIO_AB4240_var)),
+N_missing = sum(is.na(RATIO_AB4240_var)),
+Mean = mean(RATIO_AB4240_var, na.rm = TRUE),
+SD = sd(RATIO_AB4240_var, na.rm = TRUE),
+Min = min(RATIO_AB4240_var, na.rm = TRUE),
+P10 = quantile(RATIO_AB4240_var, 0.10, na.rm = TRUE),
+P25 = quantile(RATIO_AB4240_var, 0.25, na.rm = TRUE),
+Median = median(RATIO_AB4240_var, na.rm = TRUE),
+P75 = quantile(RATIO_AB4240_var, 0.75, na.rm = TRUE),
+P90 = quantile(RATIO_AB4240_var, 0.90, na.rm = TRUE),
+Max = max(RATIO_AB4240_var, na.rm = TRUE)
+)
+RATIO_AB4240_summary
+```
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - NPTAU217
+NPTAU217_var <- table1_data$NPTAU217
+NPTAU217_summary <- list(
+N = sum(!is.na(NPTAU217_var)),
+N_missing = sum(is.na(NPTAU217_var)),
+Mean = mean(NPTAU217_var, na.rm = TRUE),
+SD = sd(NPTAU217_var, na.rm = TRUE),
+Min = min(NPTAU217_var, na.rm = TRUE),
+P10 = quantile(NPTAU217_var, 0.10, na.rm = TRUE),
+P25 = quantile(NPTAU217_var, 0.25, na.rm = TRUE),
+Median = median(NPTAU217_var, na.rm = TRUE),
+P75 = quantile(NPTAU217_var, 0.75, na.rm = TRUE),
+P90 = quantile(NPTAU217_var, 0.90, na.rm = TRUE),
+Max = max(NPTAU217_var, na.rm = TRUE)
+)
+NPTAU217_summary
+```
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - PTAU217
+PTAU217_var <- table1_data$PTAU217
+PTAU217_summary <- list(
+N = sum(!is.na(PTAU217_var)),
+N_missing = sum(is.na(PTAU217_var)),
+Mean = mean(PTAU217_var, na.rm = TRUE),
+SD = sd(PTAU217_var, na.rm = TRUE),
+Min = min(PTAU217_var, na.rm = TRUE),
+P10 = quantile(PTAU217_var, 0.10, na.rm = TRUE),
+P25 = quantile(PTAU217_var, 0.25, na.rm = TRUE),
+Median = median(PTAU217_var, na.rm = TRUE),
+P75 = quantile(PTAU217_var, 0.75, na.rm = TRUE),
+P90 = quantile(PTAU217_var, 0.90, na.rm = TRUE),
+Max = max(PTAU217_var, na.rm = TRUE)
+)
+PTAU217_summary
+```
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - RATIO_PTAU217
+RATIO_PTAU217_var <- table1_data$RATIO_PTAU217
+RATIO_PTAU217_summary <- list(
+N = sum(!is.na(RATIO_PTAU217_var)),  
+N_missing = sum(is.na(RATIO_PTAU217_var)),
+Mean = mean(RATIO_PTAU217_var, na.rm = TRUE),
+SD = sd(RATIO_PTAU217_var, na.rm = TRUE),
+Min = min(RATIO_PTAU217_var, na.rm = TRUE),
+P10 = quantile(RATIO_PTAU217_var, 0.10, na.rm = TRUE),
+P25 = quantile(RATIO_PTAU217_var, 0.25, na.rm = TRUE),
+Median = median(RATIO_PTAU217_var, na.rm = TRUE),
+P75 = quantile(RATIO_PTAU217_var, 0.75, na.rm = TRUE),
+P90 = quantile(RATIO_PTAU217_var, 0.90, na.rm = TRUE),
+Max = max(RATIO_PTAU217_var, na.rm = TRUE)
+)
+RATIO_PTAU217_summary
+```
+
+
+
+
+```{r}
+#Summary statistics of AD biomarker - APS2
+APS2_var <- table1_data$APS2
+APS2_summary <- list(
+N = sum(!is.na(APS2_var)),
+N_missing = sum(is.na(APS2_var)),
+Mean = mean(APS2_var, na.rm = TRUE),
+SD = sd(APS2_var, na.rm = TRUE),
+Min = min(APS2_var, na.rm = TRUE),
+P10 = quantile(APS2_var, 0.10, na.rm = TRUE),
+P25 = quantile(APS2_var, 0.25, na.rm = TRUE),
+Median = median(APS2_var, na.rm = TRUE),
+P75 = quantile(APS2_var, 0.75, na.rm = TRUE),
+P90 = quantile(APS2_var, 0.90, na.rm = TRUE),
+Max = max(APS2_var, na.rm = TRUE)
+)
+APS2_summary
+```
+
+
+\pagebreak
+
+## Density Plots of Bioplasma data
+
+<br>
+```{r, warning = FALSE, echo = FALSE}
+ggplot(table1_data, aes(x = AB40)) +
+geom_density(fill = "lightblue", alpha = 0.6) +
+labs(
+title = "Density Plot of AB40",
+x = "AB40",
+y = "Density"
+) +
+theme_minimal()
+
+ggplot(table1_data, aes(x = AB42)) +
+geom_density(fill = "lightblue", alpha = 0.6) +
+labs(
+title = "Density Plot of AB42",
+x = "AB42",
+y = "Density"
+) +
+theme_minimal()
+
+ggplot(table1_data, aes(x = APS2)) +
+geom_density(fill = "yellow", alpha = 0.6) +
+labs(
+title = "Density Plot of APS2",
+x = "APS2",
+y = "Density"
+) +
+theme_minimal()
+
+ggplot(table1_data, aes(x = NPTAU217)) +
+geom_density(fill = "lightblue", alpha = 0.6) +
+labs(
+title = "Density Plot of NPTAU217",
+x = "NPTAU217",
+y = "Density"
+) +
+theme_minimal()
+
+ggplot(table1_data, aes(x = PTAU217)) +
+geom_density(fill = "lightblue", alpha = 0.6) +
+labs(
+title = "Density Plot of PTAU217",
+x = "PTAU217",
+y = "Density"
+) +
+theme_minimal() 
+
+ggplot(table1_data, aes(x = RATIO_AB4240)) +
+geom_density(fill = "cornflowerblue", alpha = 0.6) +
+labs(
+title = "Distribution of AB 42/40 ratio",
+x = expression("A" * beta * "-42/40 Ratio"),
+y = "Density"
+) +
+theme_minimal() + theme(panel.grid = element_blank())
+
+ggplot(table1_data, aes(x = RATIO_PTAU217)) +
+geom_density(fill = "cornflowerblue", alpha = 0.6) +
+labs(
+title = "Distribution of %pTau217",
+x = "%p-tau 217 (%)",
+y = "Density"
+) +
+theme_minimal() + theme(panel.grid = element_blank())
+```
+
+
+\pagebreak
+
+## Summary Statistics of APOE
+
+<br>
+```{r}
+#Summary statistics of AD biomarker - APOE
+APOE_var <- table1_data$APOE
+APOE_summary <- list(
+N = sum(!is.na(APOE_var)),
+N_missing = sum(is.na(APOE_var))
+)
+APOE_summary
+```
+
+
+\pagebreak
+
+## APOE Bar plot
+
+<br>
+```{r, warning= FALSE, echo = FALSE}
+ggplot(table1_data %>% filter(!is.na(APOE)), aes(x = APOE)) +
+geom_bar(fill = "#1f77b4", alpha = 0.8) +
+geom_text(
+stat = "count",
+aes(label = ..count..),
+vjust = -0.5,
+size = 4
+) +
+labs(
+title = "Bar Plot of APOE Genotypes",
+x = "APOE Genotype",
+y = "Count"
+) +
+theme_minimal()
+```
+
+
+
+
+#Figure S1 (CABBS paper 1) - Number of individuals with valid bioplasma data for all 3 biomakers
+```{r}
+valid_biomarker <- table1_data %>%
+  ungroup() %>%
+  filter(BD_Status_collected_clean == 1) %>%
+  summarise(
+    n_total = n(),
+    n_all3 = sum(complete.cases(RATIO_AB4240, RATIO_PTAU217)),
+    pct_all3 = 100 * n_all3 / n_total,
+    .groups = "drop"
+  )
+
+valid_biomarker
+```
+
+
+\pagebreak
+
+## Table 1 (CABBS paper 1): CABBS blood collection quantitative feedback results
+
+<br>
+```{r, echo = FALSE}
+table1_data %>%
+  filter(BD_Status_collected_clean == 1) %>%
+  select(Feedback_difficulty, Feedback_time, Feedback_other_study) %>%
+  tbl_summary(
+    statistic = list(
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "**  **",
+  stat_0 ~ "**CABBS participants with blood draw (n = {n})**"
+)
+
+```
+
+
+
+#Table S2 (CABBS paper 1) - Supplemental table to compare characteristics of post-study feedback questionnaire respondents
+```{r}
+# Import Excel file
+qual_subcodes <- read_excel(
+  file.path(path_to_raw, "SubjectCode_qualitative feedback.xlsx"))
+
+head(qual_subcodes)
+nrow(qual_subcodes) #total 196, but there is duplicates
+qual_subcodes %>% get_dupes(subjectcode)
+# 9 subject codes appear 2x and 1 subject code appears 3x, so 11 extra rows
+
+qual_subcodes_distinct <- qual_subcodes %>%
+  distinct()
+nrow(qual_subcodes_distinct)
+```
+
+
+#Table S2 (CABBS paper 1) - Creating the indicator variable for CABBS participants who completed the open-ended/qualitative feedback question
+```{r}
+table1_data <- table1_data %>%
+  mutate(
+    qual_feedback = if_else(
+      subjectcode %in% qual_subcodes_distinct$subjectcode, 1, 0)
+  )
+
+table(table1_data$qual_feedback)
+```
+
+
+
+#Table S2 (CABBS paper 1) - Creating the indicator variable for CABBS participants who completed all of the quantitative feeedback questions
+```{r}
+table1_data <- table1_data %>%
+  mutate(
+    quant_feedback = if_else(
+      BD_Status_collected_clean == 1 &
+      !is.na(Feedback_difficulty) &
+      !is.na(Feedback_time) &
+      !is.na(Feedback_other_study),
+      1,0))
+
+table(table1_data$quant_feedback)
+```
+
+
+#Table S2 (CABBS paper 1) - CABBS participant characteristics for those who completed the QUANTITATIVE questions
+```{r}
+quant_table <- table1_data %>%
+  filter(quant_feedback == 1) %>%
+  select(Age_harm, Female_harm, RaceEthnicity_harm, Education_harm, Memory_harm, Health_harm, Stroke_harm, HeartDisease_harm, Hypertension_harm, Diabetes_harm, Cancer_harm, Hearing_harm) %>%
+  tbl_summary(
+    statistic = list(
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "**  **",
+  stat_0 ~ "**CABBS participants who completed the quantitave feedback questionnaire (n = {n})**"
+)
+
+```
+
+
+
+#Table S2 (CABBS paper 1) - CABBS participant characteristics for those who completed the QUALITATIVE question
+```{r}
+qual_table <- table1_data %>%
+  filter(qual_feedback == 1) %>%
+  select(Age_harm, Female_harm, RaceEthnicity_harm, Education_harm, Memory_harm, Health_harm, Stroke_harm, HeartDisease_harm, Hypertension_harm, Diabetes_harm, Cancer_harm, Hearing_harm) %>%
+  tbl_summary(
+    statistic = list(
+      all_categorical() ~ "{n} ({p}%)"
+    ),
+    missing = "ifany",
+    missing_text = "Missing"
+  ) %>%
+  add_n() %>% 
+  bold_labels()%>%
+modify_header(
+  label ~ "**  **",
+  stat_0 ~ "**CABBS participants who completed the qualitative feedback question (n = {n})**"
+)
+
+
+```
+
+
+#Final Table S2 (CABBS paper 1) 
+```{r}
+tbl_merge(
+  tbls = list(CABBS_harm, quant_table, qual_table)
+)
+```
+
+
+
